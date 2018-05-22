@@ -1,0 +1,144 @@
+#!/usr/bin/python
+
+
+import os
+import subprocess
+import smtplib
+from email.MIMEMultipart import MIMEMultipart
+from email.MIMEText import MIMEText
+from email.MIMEBase import MIMEBase
+from email import encoders
+
+
+
+def setconfig():
+    file = open("/root/config.php", 'r')
+    text = file.read()
+    file.close()
+    name = "config.php"
+    file = open(os.path.join(os.path.expanduser('/%s/eaccc/' % pathapps), name),'w')
+
+    file.write(text.replace("changeport", str(mysqlport)))
+
+    file.close
+
+    os.system('echo "create database crm2" | mysql -h 127.0.0.1 -P %s -u root -p123456' % int(mysqlport))
+    os.system('mysql -h 127.0.0.1 -P %s -u root -p123456 crm2 < /tmp/latestdumpmysql.sql' % int(mysqlport))
+
+    file = open("/root/mail", 'r')
+    text = file.read()
+    file.close()
+    name = "attr"
+    file = open(os.path.join(os.path.expanduser('/root/'), name),'w')
+
+    file.write(text.replace("changeport", str(mysqlport)).replace("path", str(pathapps)))
+
+    file.close
+
+def getdbport(port=6000):
+	global mysqlport
+	checkport="netstat -tulpn | grep %s | wc -l" % int(port)
+        portexist = int(subprocess.check_output(checkport, shell=True))
+        if portexist == 1:
+                up = int(port + 1)
+                getdbport(up)
+        else:
+		mysqlport=port
+
+def getappsport(port=8000,i=1):
+	global pathapps
+	global namecontainer
+	global webport
+        checkport="netstat -tulpn | grep %s | wc -l" % int(port)
+        portexist = int(subprocess.check_output(checkport, shell=True))
+	if portexist == 1:
+                up = int(port + 1)
+                a=int(i + 1)
+                getappsport(up,a)
+        else:
+		webport=port
+		namecontainer='testcrm%s' % i
+		pathapps = '/opt/test%s.serv.net/' % i
+
+def autodeploy():
+		os.system('mysqldump -h 127.0.0.1 -u dem -p db > /tmp/latestdumpmysql.sql')
+		dbname="db%s" % namecontainer
+		os.system('docker run -d --name %s -p %s:3306 --env="MYSQL_ROOT_PASSWORD=123456" mysql:5.5'% (dbname,mysqlport))
+
+                os.system('mkdir -p %s' % pathapps)
+		os.system('cd %s && git clone some.git' % pathapps)
+		os.system('cd %s/eaccc && git checkout test && git pull origin test' % pathapps)
+		os.system('cp /root/config_override.php %s/eaccc/' % pathapps)
+		os.system('cd %s && chown -R www-data:www-data eaccc/ && chmod -R 775 eaccc/' % pathapps)
+		webname="web%s " % namecontainer
+		os.system('docker run -d -t -i --name %s -p %s:80 -v %s/eaccc:/var/www/html local/webapps:v2' % (webname,webport,pathapps))
+		setconfig()
+
+
+def sendmail():
+	fromaddr = "___@gmail.com"
+        toaddr = "____@gmail.com"
+
+        msg = MIMEMultipart()
+ 
+        msg['From'] = fromaddr
+        msg['To'] = toaddr
+        msg['Subject'] = "You docker has been created"
+ 
+        body = "parameters is attached"
+ 
+        msg.attach(MIMEText(body, 'plain'))
+ 
+        filename = "attr"
+        attachment = open("/root/attr", "rb")
+ 
+        part = MIMEBase('application', 'octet-stream')
+        part.set_payload((attachment).read())
+        encoders.encode_base64(part)
+        part.add_header('Content-Disposition', "attachment; filename= %s" % filename)
+ 
+        msg.attach(part)
+ 
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(fromaddr, "login")
+        text = msg.as_string()
+        server.sendmail(fromaddr, toaddr, text)
+        server.quit()
+
+def copysendmail():
+	fromaddr = "____@gmail.com"
+	toaddr = "____@euro-asian.ru"
+
+	msg = MIMEMultipart()
+ 
+	msg['From'] = fromaddr
+	msg['To'] = toaddr
+	msg['Subject'] = "You docker has been created"
+ 
+	body = "parameters is attached"
+ 
+	msg.attach(MIMEText(body, 'plain'))
+ 
+	filename = "attr"
+	attachment = open("/root/attr", "rb")
+ 
+	part = MIMEBase('application', 'octet-stream')
+	part.set_payload((attachment).read())
+	encoders.encode_base64(part)
+	part.add_header('Content-Disposition', "attachment; filename= %s" % filename)
+ 
+	msg.attach(part)
+ 
+	server = smtplib.SMTP('smtp.gmail.com', 587)
+	server.starttls()
+	server.login(fromaddr, "login")
+	text = msg.as_string()
+	server.sendmail(fromaddr, toaddr, text)
+	server.quit()
+
+getdbport()
+getappsport()
+autodeploy()
+sendmail()
+copysendmail()
